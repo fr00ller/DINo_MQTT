@@ -28,6 +28,7 @@ char* _SendTopic4 = "raw/Giardino/DINo/get/0004";
 
 // Update these with values suitable for your network.
 
+char* client_name = "";
 byte mac[]    = {  0x6A, 0x2C, 0x13, 0xC4, 0xEE, 0xED };
 byte server[] = { 0, 0, 0, 0 };  /// Setting Broker Server address 
 IPAddress ip(0, 0, 0, 0);  /// Setting device IP --- Need DHCP autoassing !!!
@@ -35,7 +36,7 @@ IPAddress ip(0, 0, 0, 0);  /// Setting device IP --- Need DHCP autoassing !!!
 /// -------------------------------------------------- ///
 
 
-long lastRun = 0;  // Used to temporize sending Input value .
+unsigned long lastRun = 0;  // Used to temporize sending Input value .
 
 // Callback function header
 void callback(char* topic, byte* payload, unsigned int length);
@@ -50,31 +51,18 @@ void callback(char* topic, byte* payload, unsigned int length) {
   int i = hex2int((char *)payload, 1);
   
 
-  Serial.print("VALORE CONVERTITO: ");
-  Serial.print(i);
-  Serial.println();
-  
-  Serial.write("VALORE STAMPATO: ");
-  Serial.write(payload,length);
-  Serial.println();
-
-
   /// Switch by Topic and setting Rele state 
   if(String(topic) == String(_Topic1)){
     i > 0 ? digitalWrite(5, 1) : digitalWrite(5, 0);
-      Serial.println("Setting Pin 5");
   } 
   if(String(topic) == String(_Topic2)){
     i > 0 ? digitalWrite(6, 1) : digitalWrite(6, 0);
-    Serial.println("Setting Pin 6");
   } 
   if(String(topic) == String(_Topic3)){
     i > 0 ? digitalWrite(7, 1) : digitalWrite(7, 0);
-    Serial.println("Setting Pin 7");
   }   
   if(String(topic) == String(_Topic4)){
     i > 0 ? digitalWrite(8, 1) : digitalWrite(8, 0);
-    Serial.println("Setting Pin 8");
   } 
   
 }
@@ -85,10 +73,6 @@ void Setup_Pins(){
 	pinMode(6, OUTPUT); digitalWrite(6, 0);
 	pinMode(7, OUTPUT); digitalWrite(7, 0);
 	pinMode(8, OUTPUT); digitalWrite(8, 0);
-	digitalWrite(4, 0);
-  digitalWrite(3, 0);
-  digitalWrite(2, 0);
-  digitalWrite(1, 0);
 
 }
 
@@ -105,31 +89,24 @@ unsigned long hex2int(char *a, unsigned int len)
    return val;
 }
 
+char* getPinValue(int pin){
+  
+  if(digitalRead(pin) == HIGH){
+    return "1";
+  }else{
+    return "0";
+  }
+
+}
+
 void setup()
 {
-  Serial.begin(9600);
-  Serial.println("Avvio DINo server/client MQTT ...");
-  
   Setup_Pins();
-  Serial.println("Impostazione pin default ...");
- 
-  Serial.println("Impostazione Scheda di rete ...");
-  
-  /// Initialize Ethernet interface ( DHCP ... ??)
   Ethernet.begin(mac, ip);
-  
-  Serial.println("...");
-  
-  /// Waiting for connection ...
-  delay(5000);
-  
-  Serial.println("...");
-  
-  /// Checking if client is connet  --- Need Try/catch retry (maybe DHCP ... ) cycle .
-  if (client.connect("DINo2Client")) {
 
-    Serial.println("Start subscribing Topic for Rele command ...");
-    
+  /// Checking if client is connet  --- Need Try/catch retry (maybe DHCP ... ) cycle .
+  if (client.connect(client_name)) {
+
     /// Subscibing one Topic for Rele 
     client.subscribe(_Topic1);
     client.subscribe(_Topic2);
@@ -140,22 +117,32 @@ void setup()
 
 void loop()
 {
-  client.loop();
 
-    // Not Work ???
-    // Error on statrup, every OUTPUT Rele is on !!!!
-    // Need a revision, but after first loop working correctly 
+   if(!client.connected()){
+      client.disconnect();
+      client.connect(client_name);       
+      lastRun = millis();
 
-   if ((millis() - lastRun) > 5000) {
+   }else{
+      
+      // Sending data to Domotiga every 60s ...
 
-     /// Push input data to MQTT Broker
-     client.publish(_SendTopic1,(char *)digitalRead(1));
-     client.publish(_SendTopic2,(char *)digitalRead(2));
-     client.publish(_SendTopic3,(char *)digitalRead(3));
-     client.publish(_SendTopic4,(char *)digitalRead(4));
-
-
-     lastRun = millis();
+     if(millis() > (lastRun + 60000)){
+        lastRun = millis();
+        client.publish(_SendTopic1, getPinValue(A2));
+        client.publish(_SendTopic2,getPinValue(A3));
+        client.publish(_SendTopic3,getPinValue(A4));
+        client.publish(_SendTopic4,getPinValue(A5));  
+         
+        client.publish(_SendTopicRel1,getPinValue(5));
+        client.publish(_SendTopicRel2,getPinValue(6));
+        client.publish(_SendTopicRel3,getPinValue(7));
+        client.publish(_SendTopicRel4,getPinValue(8));    
+     } 
+   
+     client.loop();  
+   
    }
+    
 }
 
